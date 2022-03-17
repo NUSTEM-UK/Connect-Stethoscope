@@ -96,6 +96,7 @@ class ServoController:
         self._max_display_position = 180
 
         self._reversing = False
+        self.display_mode = 0   # 'normal'
 
         # Booleans to determine pen colour for drawing values
         self.min_position_being_updated = False
