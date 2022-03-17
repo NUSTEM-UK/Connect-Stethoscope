@@ -41,6 +41,9 @@ up_arrow =[0,4,14,21,4,4,0,0]
 down_arrow = [0,4,4,21,14,4,0,0]
 bits = [128,64,32,16,8,4,2,1]  # Powers of 2
 
+# Display mode
+display_mode = 0 # Default
+
 # Print defined character from set above
 def draw_char(xpos, ypos, pattern):
     for line in range(8):  # 5x8 characters
@@ -104,6 +107,7 @@ class ServoController:
         self.position_being_updated = False
         self.speed_being_updated = False
         self.is_selected = False
+        self.is_running = True
 
         # Set a time reference
         self._time_ref = utime.ticks_ms()
@@ -149,6 +153,24 @@ class ServoController:
         # self._servo.value((self.angle + 90) % 180)
         # self._servo.value(rescale(self.angle, -90, 90, 0, 180))
 
+        if self.display_mode == 1:
+            # Display speed datat
+            display.set_pen(0, 255, 0) if self.speed_being_updated else display.set_pen(255, 255, 0)
+            if self.vertical_offset = 90:
+                # Display speed by other button
+                display.text(zfl(str(self.speed), 3) + " SPD", 10, 20, 200)
+                # DIsplay current angle in centre space
+                display.text(zfl(str(self.angle), 3), 105, 130, 200)
+                # Display RUN/STOP text
+                if self.is_running:
+                    display.set_pen(255, 0, 0)
+                    display.text("STOP", 200, self.vertical_offset, 200)
+                else:
+                    display.set_pen(0, 255, 0)
+                    display.text(" RUN", 200, self.vertical_offset, 200)
+            else:
+                display.text(zfl(str(self.speed), 3) + " SPD", 10, self.vertical_offset + 20, 200)
+
     def move(self):
         """Move the servo to the current position."""
         # self._servo.value(rescale(self.angle, 0, 180, -90, 90))
@@ -160,12 +182,25 @@ class ServoController:
         # Deselect the other thing if appropriate
         if self.min_position_being_updated:
             self.max_position_being_updated = False
+            self.speed_being_updated = False
 
     def max_position_setting_toggle(self):
         self.max_position_being_updated = not self.max_position_being_updated
         # Deselect the other thing if appropriate
         if self.max_position_being_updated:
             self.min_position_being_updated = False
+            self.speed_being_updated = False
+
+    def speed_setting_toggle(self):
+        self.speed_being_updated = not self.speed_being_updated
+        # Deselect the other things if appropriate
+        if self.speed_being_updated:
+            self.min_position_being_updated = False
+            self.max_position_being_updated = False
+
+    def toggle_run(self):
+        """Toggle run state."""
+        self.is_running = not self.is_running
 
     def increment_value(self):
         """Increment whatever we're incrementing.
@@ -186,6 +221,11 @@ class ServoController:
         # if we're moving min and it's > max, increment max also
         if self.min_angle > self.max_angle:
             self.max_angle = self.min_angle
+
+        if self.speed_being_updated:
+            self.speed += 1
+        if self.speed > 150:
+            self.speed = 150
 
         # print(f"[{self.min_angle}, {self.max_angle}]")
 
@@ -208,6 +248,12 @@ class ServoController:
             self.min_angle = self.max_angle
 
 
+        if self.speed_being_updated:
+            self.speed -= 1
+        if self.speed < 1:
+            self.speed = 1
+
+
     def update(self):
         """Update the servo position."""
 
@@ -217,16 +263,20 @@ class ServoController:
         self._angle_delta = self.speed * self._time_delta / 1000
 
         # Update angular position, catching end points
-        if self._reversing:
-            self.angle -= self._angle_delta
-            if self.angle < self.min_angle:
-                self.angle = self.min_angle
-                self._reversing = False
-        else:
-            self.angle += self._angle_delta
-            if self.angle > self.max_angle:
-                self.angle = self.max_angle
-                self._reversing = True
+        if self.is_running:
+            if self._reversing:
+                self.angle -= self._angle_delta
+                if self.angle < self.min_angle:
+                    self.angle = self.min_angle
+                    self._reversing = False
+            else:
+                self.angle += self._angle_delta
+                if self.angle > self.max_angle:
+                    self.angle = self.max_angle
+                    self._reversing = True
+
+        # Update physical servo position
+        self.move()
 
 
 class ButtonController:
@@ -316,7 +366,7 @@ if __name__ == '__main__':
 
     # Setting up callbacks for buttons and rotary encoder.
     # This is for the main screen: later modes will pass their own sets here.
-    button_mapping = {
+    button_mapping_main = {
         display.BUTTON_A: {
             "object": servoD5, "method": "min_position_setting_toggle" },
         display.BUTTON_X: {
@@ -326,9 +376,9 @@ if __name__ == '__main__':
         display.BUTTON_Y: {
             "object": servoD7, "method": "max_position_setting_toggle" }
     }
-    buttons = ButtonController(button_mapping, debounce_interval=500)
+    buttons = ButtonController(button_mapping_main, debounce_interval=500)
 
-    rotary_mapping = {
+    rotary_mapping_main = {
         servoD5: {
             "inc_method": "increment_value",
             "dec_method": "decrement_value"
@@ -338,7 +388,7 @@ if __name__ == '__main__':
             "dec_method": "decrement_value"
         }
     }
-    rotary = RotaryController(rotary_mapping)
+    rotary = RotaryController(rotary_mapping_main)
 
 
     while True:
@@ -350,9 +400,6 @@ if __name__ == '__main__':
 
         servoD5.update()
         servoD7.update()
-
-        servoD5.move()
-        servoD7.move()
 
         buttons.check()
         rotary.check()
