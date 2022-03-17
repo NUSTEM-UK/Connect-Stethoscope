@@ -68,12 +68,22 @@ def rescale(x, in_min, in_max, out_min, out_max):
         return int((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min)
 
 
-def zfl(s, width):
+def zfl(s, width=3, padchar='0'):
     """Pads string with leading zeros.
 
     From https://stackoverflow.com/questions/63271522/is-there-a-zfill-type-function-in-micro-python-zfill-in-micro-python
-    There's no zfill() in Micropython."""
-    return '{:0>{w}}'.format(s, w=width)
+    then extended for variable fill character. There's no zfill() in Micropython, so... here we are."""
+    # return '{:0>{w}}'.format(s, w=width)
+    return '{:{p}>{w}}'.format(s, w=width, p=padchar)
+
+
+def increment_application_mode():
+    """Loops through application modes."""
+    global display_mode
+    display_mode += 1
+    if display_mode > 1:
+        display_mode = 0
+
 
 class ServoController:
     """Visual and serial interface for servo control.
@@ -156,7 +166,7 @@ class ServoController:
         if self.display_mode == 1:
             # Display speed datat
             display.set_pen(0, 255, 0) if self.speed_being_updated else display.set_pen(255, 255, 0)
-            if self.vertical_offset = 90:
+            if self.vertical_offset == 90:
                 # Display speed by other button
                 display.text(zfl(str(self.speed), 3) + " SPD", 10, 20, 200)
                 # DIsplay current angle in centre space
@@ -201,6 +211,22 @@ class ServoController:
     def toggle_run(self):
         """Toggle run state."""
         self.is_running = not self.is_running
+
+    def run(self):
+        """Start, or keep going."""
+        self.is_running = True
+
+    def stop(self):
+        """Stop, or stay stopped."""
+        self.is_running = False
+
+    def display_small(self):
+        """Display minimal bar only."""
+        self.display_mode = 0
+
+    def display_full(self):
+        """Display detailed view."""
+        self.display_mode =1
 
     def increment_value(self):
         """Increment whatever we're incrementing.
@@ -303,6 +329,55 @@ class ButtonController:
                 getattr(self._mapping[button]['object'], self._mapping[button]['method'])()
 
 
+class ApplicationController:
+    """Handle application state changes."""
+
+    def __init__(self, object_list, menu_list, application_state=0, num_states=3):
+        """Initialise the controller."""
+        self.application_state = application_state
+        self._object_list = object_list
+        self._num_states = num_states
+        self._menu_list = menu_list
+
+    def increment_state(self):
+        """Cycle application state."""
+        self.application_state += 1
+        if self.application_state > (self._num_states - 1):
+            self.application_state = 0
+        self._handle_state_change()
+
+    def _handle_state_change(self):
+        """Update application state.
+
+        Application logic goes here."""
+        if self.application_state == 0:
+            for thing in self._object_list:
+                thing.display_small()
+                thing.run()
+        elif self.application_state == 1:
+            for thing in self._object_list:
+                thing.stop()
+            self._object_list[0].display_full()
+        elif self.application_state == 2:
+            for thing in self._object_list:
+                thing.stop()
+            self._object_list[1].display_full()
+
+    def update(self):
+        if self.application_state == 0:
+            for thing in self._object_list:
+                thing.update()
+                thing.draw()
+        elif self.application_state == 1:
+            self._object_list[0].update()
+            self._object_list[0].draw()
+        elif self.application_state == 2:
+            self._object_list[1].update()
+            self._object_list[1].draw()
+
+
+
+
 class RotaryController():
     """Read rotary encoder value and dispatch accordingly.
 
@@ -361,6 +436,10 @@ if __name__ == '__main__':
     servoD7.draw()
     display.update()
 
+    # Rotary encoder button
+    # Shorts to ground when pressed
+    control_button = Pin(26, Pin.IN, Pin.PULL_UP)
+
     application_mode = 0       # Default animation playback mode
 
 
@@ -374,9 +453,43 @@ if __name__ == '__main__':
         display.BUTTON_B: {
             "object": servoD7, "method": "min_position_setting_toggle" },
         display.BUTTON_Y: {
-            "object": servoD7, "method": "max_position_setting_toggle" }
+            "object": servoD7, "method": "max_position_setting_toggle" },
+        control_button: {
+            "object": app, "method": "increment_state"}
     }
-    buttons = ButtonController(button_mapping_main, debounce_interval=500)
+
+    button_mapping_servoD5 = {
+        display.BUTTON_A: {
+            "object": servoD5, "method": "min_position_setting_toggle" },
+        display.BUTTON_X: {
+            "object": servoD5, "method": "max_position_setting_toggle" },
+        display.BUTTON_B: {
+            "object": servoD5, "method": "speed_setting_toggle" },
+        display.BUTTON_Y: {
+            "object": servoD5, "method": "toggle_run" },
+        control_button: {
+            "object": app, "method": "increment_state"}
+    }
+
+    button_mapping_servoD7 = {
+        display.BUTTON_A: {
+            "object": servoD7, "method": "speed_setting_toggle" },
+        display.BUTTON_X: {
+            "object": servoD7, "method": "toggle_run" },
+        display.BUTTON_B: {
+            "object": servoD7, "method": "min_position_setting_toggle" },
+        display.BUTTON_Y: {
+            "object": servoD7, "method": "max_position_setting_toggle" },
+        control_button: {
+            "object": app, "method": "increment_state"}
+    }
+
+    buttons0 = ButtonController(button_mapping_main)
+    buttons1 = ButtonController(button_mapping_servoD5)
+    buttons2 = ButtonController(button_mapping_servoD7)
+
+    app = ApplicationController((servoD5, servoD7), (buttons0, buttons1, buttons2), 0, 3)
+
 
     rotary_mapping_main = {
         servoD5: {
