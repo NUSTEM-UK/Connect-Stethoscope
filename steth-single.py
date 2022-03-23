@@ -102,8 +102,8 @@ class ServoController:
         #       in Micropython, so it's a pain to do input validation.
         #       But equally, I can't find any documentation on this. Sigh.
 
-        self.min_angle = 0
-        self.max_angle = 180
+        self.min_angle = 90
+        self.max_angle = 90
 
         self._min_display_position = 0
         self._max_display_position = 180
@@ -117,7 +117,7 @@ class ServoController:
         self.position_being_updated = False
         self.speed_being_updated = False
         self.is_selected = False
-        self.is_running = True
+        self.is_running = False
 
         # Set a time reference
         self._time_ref = utime.ticks_ms()
@@ -135,12 +135,12 @@ class ServoController:
         # Display minimum angle
         # Set pen colour to green if being updated, else yellow
         display.set_pen(0, 255, 0) if self.min_position_being_updated else display.set_pen(255, 255, 0)
-        display.text(zfl(str(self.min_angle), 3), 10, self.vertical_offset, 200)
+        display.text(zfl(str(self.min_angle), 3), 10, self.vertical_offset, 200, 2)
         # printstring(zfl(str(self.min_angle), 3), 10, self.vertical_offset, 1, False, False)
 
         # Display maximum angle
         display.set_pen(0, 255, 0) if self.max_position_being_updated else display.set_pen(255, 255, 0)
-        display.text(zfl(str(self.max_angle), 3), 200, self.vertical_offset, 200)
+        display.text(zfl(str(self.max_angle), 3), 200, self.vertical_offset, 200, 2)
 
         # Draw scale line
         display.set_pen(255, 255, 255)
@@ -167,21 +167,35 @@ class ServoController:
 
         if self.display_mode == 1:
             # Display speed data
-            display.set_pen(0, 255, 0) if self.speed_being_updated else display.set_pen(255, 255, 0)
             if self.vertical_offset == 90:
                 # Display speed by other button
-                display.text(zfl(str(self.speed), 3) + " SPD", 10, 20, 200)
+                display.set_pen(0, 255, 0) if self.speed_being_updated else display.set_pen(255, 255, 0)
+                display.text(zfl(str(self.speed), 3) + " SPD", 10, 20, 200, 2)
                 # DIsplay current angle in centre space
-                display.text(zfl(str(self.angle), 3), 105, 130, 200)
+                display.set_pen(0, 255, 0) if self.position_being_updated else display.set_pen(255, 255, 0)
+                display.text(zfl(str(int(self.angle)), 3), 95, 45, 200, 4)
                 # Display RUN/STOP text
                 if self.is_running:
                     display.set_pen(255, 0, 0)
-                    display.text("STOP", 200, self.vertical_offset, 200)
+                    display.text("STOP", 190, 25, 200, 2)
                 else:
                     display.set_pen(0, 255, 0)
-                    display.text(" RUN", 200, self.vertical_offset, 200)
+                    display.text(" RUN", 190, 25, 200, 2)
             else:
-                display.text(zfl(str(self.speed), 3) + " SPD", 10, self.vertical_offset + 20, 200)
+                # Display speed setting by lower-left button
+                display.set_pen(0, 255, 0) if self.speed_being_updated else display.set_pen(255, 255, 0)
+                display.text(zfl(str(self.speed), 3) + " SPD", 10, self.vertical_offset + 75, 200, 2)
+                # Display current angle in centre space
+                display.set_pen(0, 255, 0) if self.position_being_updated else display.set_pen(255, 255, 0)
+                display.text(zfl(str(int(self.angle)), 3), 95, self.vertical_offset + 35, 200, 4)
+                # Display RUN/STOP legend by lower right button
+                if self.is_running:
+                    display.set_pen(255, 0, 0)
+                    display.text("STOP", 190, self.vertical_offset + 75, 200, 2)
+                else:
+                    display.set_pen(0, 255, 0)
+                    display.text(" RUN", 190, self.vertical_offset + 75, 200, 2)
+
 
     def move(self):
         """Move the servo to the current position."""
@@ -195,10 +209,28 @@ class ServoController:
         if self.min_position_being_updated:
             self.max_position_being_updated = False
             self.speed_being_updated = False
+            self.stop()
 
     def max_position_setting_toggle(self):
         self.max_position_being_updated = not self.max_position_being_updated
         # Deselect the other thing if appropriate
+        if self.max_position_being_updated:
+            self.min_position_being_updated = False
+            self.speed_being_updated = False
+            self.stop()
+
+    def position_and_min_setting_toggle(self):
+        self.min_position_being_updated = not self.min_position_being_updated
+        self.position_being_updated = self.min_position_being_updated
+        self.angle = self.min_angle
+        if self.min_position_being_updated:
+            self.max_position_being_updated = False
+            self.speed_being_updated = False
+
+    def position_and_max_setting_toggle(self):
+        self.max_position_being_updated = not self.max_position_being_updated
+        self.position_being_updated = self.max_position_being_updated
+        self.angle = self.max_angle
         if self.max_position_being_updated:
             self.min_position_being_updated = False
             self.speed_being_updated = False
@@ -209,10 +241,15 @@ class ServoController:
         if self.speed_being_updated:
             self.min_position_being_updated = False
             self.max_position_being_updated = False
+            self.position_being_updated = False
 
     def toggle_run(self):
         """Toggle run state."""
         self.is_running = not self.is_running
+        self.min_position_being_updated = False
+        self.max_position_being_updated = False
+        self.position_being_updated = False
+        self.speed_being_updated = False
 
     def run(self):
         """Start, or keep going."""
@@ -237,23 +274,29 @@ class ServoController:
         """
         # print(">>> Incrementing")
         if self.min_position_being_updated:
-            self.min_angle += 1
-        if self.min_angle > 180:
-            self.min_angle = 180
+            self.min_angle += 2
+            if self.min_angle > 180:
+                self.min_angle = 180
 
         if self.max_position_being_updated:
-            self.max_angle += 1
-        if self.max_angle > 180:
-            self.max_angle = 180
+            self.max_angle += 2
+            if self.max_angle > 180:
+                self.max_angle = 180
 
         # if we're moving min and it's > max, increment max also
         if self.min_angle > self.max_angle:
             self.max_angle = self.min_angle
 
         if self.speed_being_updated:
-            self.speed += 1
-        if self.speed > 150:
-            self.speed = 150
+            self.speed += 2
+            if self.speed > 150:
+                self.speed = 150
+
+        if self.position_being_updated:
+            self.angle += 2
+            if self.angle > 180:
+                self.angle = 180
+
 
         # print(f"[{self.min_angle}, {self.max_angle}]")
 
@@ -263,14 +306,14 @@ class ServoController:
         Keep it within bounds.
         """
         if self.min_position_being_updated:
-            self.min_angle -= 1
-        if self.min_angle < 0:
-            self.min_angle = 0
+            self.min_angle -= 2
+            if self.min_angle < 0:
+                self.min_angle = 0
 
         if self.max_position_being_updated:
-            self.max_angle -= 1
-        if self.max_angle < 0:
-            self.max_angle = 0
+            self.max_angle -= 2
+            if self.max_angle < 0:
+                self.max_angle = 0
 
         if self.max_angle < self.min_angle:
             self.min_angle = self.max_angle
@@ -278,8 +321,13 @@ class ServoController:
 
         if self.speed_being_updated:
             self.speed -= 1
-        if self.speed < 1:
-            self.speed = 1
+            if self.speed < 1:
+                self.speed = 1
+
+        if self.position_being_updated:
+            self.angle -= 2
+            if self.angle < 0:
+                self.angle = 0
 
 
     def update(self):
@@ -408,11 +456,11 @@ class ApplicationController:
                 thing.update()
                 thing.draw()
         elif self.application_state == 1:
-            # self._menu_list[1].check()
+            self._menu_list[1].check()
             self._object_list[0].update()
             self._object_list[0].draw()
         elif self.application_state == 2:
-            # self._menu_list[2].check()
+            self._menu_list[2].check()
             self._object_list[1].update()
             self._object_list[1].draw()
 
@@ -492,9 +540,9 @@ if __name__ == '__main__':
 
     button_mapping_servoD5 = {
         display.BUTTON_A: {
-            "object": servoD5, "method": "min_position_setting_toggle" },
+            "object": servoD5, "method": "position_and_min_setting_toggle" },
         display.BUTTON_X: {
-            "object": servoD5, "method": "max_position_setting_toggle" },
+            "object": servoD5, "method": "position_and_max_setting_toggle" },
         display.BUTTON_B: {
             "object": servoD5, "method": "speed_setting_toggle" },
         display.BUTTON_Y: {
@@ -507,16 +555,16 @@ if __name__ == '__main__':
         display.BUTTON_X: {
             "object": servoD7, "method": "toggle_run" },
         display.BUTTON_B: {
-            "object": servoD7, "method": "min_position_setting_toggle" },
+            "object": servoD7, "method": "position_and_min_setting_toggle" },
         display.BUTTON_Y: {
-            "object": servoD7, "method": "max_position_setting_toggle" }
+            "object": servoD7, "method": "position_and_max_setting_toggle" }
     }
 
     buttons0 = ButtonController(button_mapping_main)
     buttons1 = ButtonController(button_mapping_servoD5)
     buttons2 = ButtonController(button_mapping_servoD7)
 
-    app = ApplicationController((servoD5, servoD7), (buttons0, buttons1, buttons2), 1, 3)
+    app = ApplicationController((servoD5, servoD7), (buttons0, buttons1, buttons2), 0, 3)
 
     # Rotary encoder button
     # Shorts to ground when pressed
@@ -552,7 +600,7 @@ if __name__ == '__main__':
         # servoD7.update()
 
         rotary.check()
-        # app_control_button_controller.check()
+        app_control_button_controller.check()
         app.update()
         display.update()
 
