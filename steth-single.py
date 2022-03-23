@@ -159,7 +159,7 @@ class ServoController:
         self._marker_pos = rescale(self.angle, 0, 180, 50, 140 + 50) - 10
         display.set_pen(255, 0, 0)
         # I don't know why this print is necessary, but without it the code blows up after a very short time.
-        print(self._marker_pos, self.vertical_offset + 13 + self.marker_offset)
+        # print(self._marker_pos, self.vertical_offset + 13 + self.marker_offset)
         draw_char(self._marker_pos, self.vertical_offset + 13 + self.marker_offset, self.marker)
         # Update physical servo position, correcting for angle range
         # self._servo.value((self.angle + 90) % 180)
@@ -397,7 +397,6 @@ class ApplicationController:
             self._object_list[1].update()
             self._object_list[1].draw()
 
-
 class RotaryController():
     """Read rotary encoder value and dispatch accordingly.
 
@@ -529,7 +528,6 @@ if __name__ == '__main__':
         display.clear()
         # servoD5.draw()
         # servoD7.draw()
-        # display.update()
 
         # servoD5.update()
         # servoD7.update()
@@ -537,6 +535,7 @@ if __name__ == '__main__':
         rotary.check()
         # app_control_button_controller.check()
         app.update()
+        display.update()
 
         # utime.sleep_ms(20)
 
