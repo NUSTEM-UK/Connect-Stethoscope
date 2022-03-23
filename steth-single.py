@@ -209,7 +209,7 @@ class ServoController:
         if self.min_position_being_updated:
             self.max_position_being_updated = False
             self.speed_being_updated = False
-            self.stop()
+            self.is_running = False
 
     def max_position_setting_toggle(self):
         self.max_position_being_updated = not self.max_position_being_updated
@@ -217,7 +217,7 @@ class ServoController:
         if self.max_position_being_updated:
             self.min_position_being_updated = False
             self.speed_being_updated = False
-            self.stop()
+            self.is_running = False
 
     def position_and_min_setting_toggle(self):
         self.min_position_being_updated = not self.min_position_being_updated
