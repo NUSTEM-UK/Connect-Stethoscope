@@ -348,6 +348,25 @@ class ButtonController:
                 getattr(self._mapping[button]['object'], self._mapping[button]['method'])()
 
 
+class PinButtonController:
+    """Lazy duplicate of ButtonController to avoid dependency on display."""
+
+    def __init__(self, mapping, debounce_interval=500):
+        """Initialise the controller."""
+        self._mapping = mapping
+        self.debounce_interval = debounce_interval
+        self._time_last_checked = utime.ticks_ms()
+
+    def check(self):
+        """Check the buttons and call the appropriate method."""
+        # Check for button presses
+        for button in self._mapping:
+            if button.is_pressed() and utime.ticks_diff(utime.ticks_ms(), self._time_last_checked) > self.debounce_interval:
+                self._time_last_checked = utime.ticks_ms()
+                # Have to use getattr here for dynamic method call
+                getattr(self._mapping[button]['object'], self._mapping[button]['method'])()
+
+
 class ApplicationController:
     """Handle application state changes."""
 
@@ -497,18 +516,18 @@ if __name__ == '__main__':
     buttons1 = ButtonController(button_mapping_servoD5)
     buttons2 = ButtonController(button_mapping_servoD7)
 
-    app = ApplicationController((servoD5, servoD7), (buttons0, buttons1, buttons2), 0, 3)
+    app = ApplicationController((servoD5, servoD7), (buttons0, buttons1, buttons2), 1, 3)
 
     # Rotary encoder button
     # Shorts to ground when pressed
     # Have to do this outside of app, because I can't work out how to pass
     # a reference to parent in button mapping, without weakrefs.
     # There'll be a way. Meh.
-    # app_control_button = PinButton(26, True)
-    # control_button_mapping = {
-    #     app_control_button: {
-    #         "object": app, "method": "increment_state" } }
-    # app_control_button_controller = ButtonController(control_button_mapping)
+    app_control_button = PinButton(26, True)
+    control_button_mapping = {
+        app_control_button: {
+            "object": app, "method": "increment_state" } }
+    app_control_button_controller = PinButtonController(control_button_mapping)
 
     rotary_mapping_main = {
         servoD5: {
