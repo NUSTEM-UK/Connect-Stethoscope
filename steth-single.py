@@ -158,13 +158,15 @@ class ServoController:
         # Draw position marker
         self._marker_pos = rescale(self.angle, 0, 180, 50, 140 + 50) - 10
         display.set_pen(255, 0, 0)
+        # I don't know why this print is necessary, but without it the code blows up after a very short time.
+        print(self._marker_pos, self.vertical_offset + 13 + self.marker_offset)
         draw_char(self._marker_pos, self.vertical_offset + 13 + self.marker_offset, self.marker)
         # Update physical servo position, correcting for angle range
         # self._servo.value((self.angle + 90) % 180)
         # self._servo.value(rescale(self.angle, -90, 90, 0, 180))
 
         if self.display_mode == 1:
-            # Display speed datat
+            # Display speed data
             display.set_pen(0, 255, 0) if self.speed_being_updated else display.set_pen(255, 255, 0)
             if self.vertical_offset == 90:
                 # Display speed by other button
@@ -226,7 +228,7 @@ class ServoController:
 
     def display_full(self):
         """Display detailed view."""
-        self.display_mode =1
+        self.display_mode = 1
 
     def increment_value(self):
         """Increment whatever we're incrementing.
@@ -305,6 +307,23 @@ class ServoController:
         self.move()
 
 
+class PinButton:
+    """Wrap an input Pin in button accessor methods."""
+
+    def __init__(self, pin, pullup=False):
+        self._pin = pin
+        self._pullup = pullup
+        self._button = Pin(pin, Pin.IN, Pin.PULL_UP if self._pullup else Pin.PULL_DOWN)
+
+    def value(self):
+        return self._button.value()
+
+    def is_pressed(self):
+        if self._pullup:
+            return self.value() == 0
+        else:
+            return self.value() == 1
+
 class ButtonController:
     """Poll buttons and dispatch events.
 
@@ -365,17 +384,18 @@ class ApplicationController:
 
     def update(self):
         if self.application_state == 0:
+            self._menu_list[0].check()
             for thing in self._object_list:
                 thing.update()
                 thing.draw()
         elif self.application_state == 1:
+            # self._menu_list[1].check()
             self._object_list[0].update()
             self._object_list[0].draw()
         elif self.application_state == 2:
+            # self._menu_list[2].check()
             self._object_list[1].update()
             self._object_list[1].draw()
-
-
 
 
 class RotaryController():
@@ -436,10 +456,6 @@ if __name__ == '__main__':
     servoD7.draw()
     display.update()
 
-    # Rotary encoder button
-    # Shorts to ground when pressed
-    control_button = Pin(26, Pin.IN, Pin.PULL_UP)
-
     application_mode = 0       # Default animation playback mode
 
 
@@ -453,9 +469,7 @@ if __name__ == '__main__':
         display.BUTTON_B: {
             "object": servoD7, "method": "min_position_setting_toggle" },
         display.BUTTON_Y: {
-            "object": servoD7, "method": "max_position_setting_toggle" },
-        control_button: {
-            "object": app, "method": "increment_state"}
+            "object": servoD7, "method": "max_position_setting_toggle" }
     }
 
     button_mapping_servoD5 = {
@@ -466,9 +480,7 @@ if __name__ == '__main__':
         display.BUTTON_B: {
             "object": servoD5, "method": "speed_setting_toggle" },
         display.BUTTON_Y: {
-            "object": servoD5, "method": "toggle_run" },
-        control_button: {
-            "object": app, "method": "increment_state"}
+            "object": servoD5, "method": "toggle_run" }
     }
 
     button_mapping_servoD7 = {
@@ -479,9 +491,7 @@ if __name__ == '__main__':
         display.BUTTON_B: {
             "object": servoD7, "method": "min_position_setting_toggle" },
         display.BUTTON_Y: {
-            "object": servoD7, "method": "max_position_setting_toggle" },
-        control_button: {
-            "object": app, "method": "increment_state"}
+            "object": servoD7, "method": "max_position_setting_toggle" }
     }
 
     buttons0 = ButtonController(button_mapping_main)
@@ -490,6 +500,16 @@ if __name__ == '__main__':
 
     app = ApplicationController((servoD5, servoD7), (buttons0, buttons1, buttons2), 0, 3)
 
+    # Rotary encoder button
+    # Shorts to ground when pressed
+    # Have to do this outside of app, because I can't work out how to pass
+    # a reference to parent in button mapping, without weakrefs.
+    # There'll be a way. Meh.
+    # app_control_button = PinButton(26, True)
+    # control_button_mapping = {
+    #     app_control_button: {
+    #         "object": app, "method": "increment_state" } }
+    # app_control_button_controller = ButtonController(control_button_mapping)
 
     rotary_mapping_main = {
         servoD5: {
@@ -507,15 +527,16 @@ if __name__ == '__main__':
     while True:
         display.set_pen(0, 0, 0)
         display.clear()
-        servoD5.draw()
-        servoD7.draw()
-        display.update()
+        # servoD5.draw()
+        # servoD7.draw()
+        # display.update()
 
-        servoD5.update()
-        servoD7.update()
+        # servoD5.update()
+        # servoD7.update()
 
-        buttons.check()
         rotary.check()
+        # app_control_button_controller.check()
+        app.update()
 
         # utime.sleep_ms(20)
 
