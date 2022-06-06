@@ -426,6 +426,8 @@ class ApplicationController:
         self._object_list = object_list
         self._num_states = num_states
         self._menu_list = menu_list
+        # Update devices to force correct drawing.
+        self._handle_state_change()
 
     def increment_state(self):
         """Cycle application state."""
