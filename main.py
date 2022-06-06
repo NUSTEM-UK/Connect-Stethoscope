@@ -419,7 +419,9 @@ class ApplicationController:
     """Handle application state changes."""
 
     def __init__(self, object_list, menu_list, application_state=0, num_states=3):
-        """Initialise the controller."""
+        """Initialise the controller.
+
+        Default to the upper servo view (application state 1)."""
         self.application_state = application_state
         self._object_list = object_list
         self._num_states = num_states
@@ -564,7 +566,8 @@ if __name__ == '__main__':
     buttons1 = ButtonController(button_mapping_servoD5)
     buttons2 = ButtonController(button_mapping_servoD7)
 
-    app = ApplicationController((servoD5, servoD7), (buttons0, buttons1, buttons2), 0, 3)
+    # Initialise the app, on upper servo view (state 1)
+    app = ApplicationController((servoD5, servoD7), (buttons0, buttons1, buttons2), 1, 3)
 
     # Rotary encoder button
     # Shorts to ground when pressed
