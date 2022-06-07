@@ -42,7 +42,7 @@ down_arrow = [0,4,4,21,14,4,0,0]
 bits = [128,64,32,16,8,4,2,1]  # Powers of 2
 
 # Display mode
-display_mode = 0 # Default
+display_mode = 1 # Default
 
 # Print defined character from set above
 def draw_char(xpos, ypos, pattern):
