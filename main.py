@@ -28,15 +28,17 @@ Total power supply on pin 36: <300 mA. Stall current of a microservo is ~500 mA,
 import utime
 from machine import Pin
 from servo import Servo
-import picodisplay as display
+import picodisplay as display # FIXME: Update to PicoGraphics
 from rotary_irq_rp2 import RotaryIRQ
 
 # Set up and initialise Pico Display
+# FIXME: This won't work for PicoGraphics, there's a different way around.
 buf = bytearray(display.get_width() * display.get_height() * 2)
 display.init(buf)
 display.set_backlight(0.8)
 
 # Borrowed from Tony Goodhew's PicoDisplay example code
+# FIXME: We're doing this to show arrows. Could probably re-implement with sprites?
 up_arrow =[0,4,14,21,4,4,0,0]
 down_arrow = [0,4,4,21,14,4,0,0]
 bits = [128,64,32,16,8,4,2,1]  # Powers of 2
@@ -45,6 +47,7 @@ bits = [128,64,32,16,8,4,2,1]  # Powers of 2
 display_mode = 0 # Default
 
 # Print defined character from set above
+# FIXME: If we're drawing arrows with sprites, this won't be necessary.
 def draw_char(xpos, ypos, pattern):
     for line in range(8):  # 5x8 characters
         for ii in range(5): # Low value bits only
@@ -126,6 +129,7 @@ class ServoController:
         """Draw the servo on the display.
 
         Also, write position to servo."""
+        # FIXME: should mostly 'just work' if we establish the display object correctly.
 
         # Are we selected? if so, draw a background
         if self.is_selected:
@@ -409,6 +413,9 @@ class PinButtonController:
         """Check the buttons and call the appropriate method."""
         # Check for button presses
         for button in self._mapping:
+            # FIXME: Gaah, it doesn't look like is_pressed() exists in the new PicoGraphics/PicoDisplay library?!
+            #        Oh, but there is a Button class in pimoroni module (https://github.com/pimoroni/pimoroni-pico/blob/main/micropython/modules_py/pimoroni.py)
+            #        ...and that does have is_pressed().
             if button.is_pressed() and utime.ticks_diff(utime.ticks_ms(), self._time_last_checked) > self.debounce_interval:
                 self._time_last_checked = utime.ticks_ms()
                 # Have to use getattr here for dynamic method call
@@ -527,6 +534,9 @@ if __name__ == '__main__':
 
     # Setting up callbacks for buttons and rotary encoder.
     # This is for the main screen: later modes will pass their own sets here.
+    # FIXME: Buttons are now handled by the Button module, so this will need to be updated.
+    #        Suspect we'll have to instantiate each Button object first, since it isn't predeclared in the
+    #        display module now.
     button_mapping_main = {
         display.BUTTON_A: {
             "object": servoD5, "method": "min_position_setting_toggle" },
@@ -560,10 +570,12 @@ if __name__ == '__main__':
             "object": servoD7, "method": "position_and_max_setting_toggle" }
     }
 
+    # TODO: Feels like this should be some sort of indexed data structure, rather than discrete objects.
     buttons0 = ButtonController(button_mapping_main)
     buttons1 = ButtonController(button_mapping_servoD5)
     buttons2 = ButtonController(button_mapping_servoD7)
 
+    # TODO: Look! Look! We're even passing a tuple of the objects into ApplicationController!
     app = ApplicationController((servoD5, servoD7), (buttons0, buttons1, buttons2), 0, 3)
 
     # Rotary encoder button
@@ -591,6 +603,7 @@ if __name__ == '__main__':
 
 
     while True:
+        # FIXME: This will change
         display.set_pen(0, 0, 0)
         display.clear()
         # servoD5.draw()
@@ -602,6 +615,7 @@ if __name__ == '__main__':
         rotary.check()
         app_control_button_controller.check()
         app.update()
+        # FIXME: This will change
         display.update()
 
         # utime.sleep_ms(20)
