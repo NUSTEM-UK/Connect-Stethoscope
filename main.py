@@ -104,6 +104,7 @@ class ServoController:
         # TODO: I don't think @property/getter/setter decorators work
         #       in Micropython, so it's a pain to do input validation.
         #       But equally, I can't find any documentation on this. Sigh.
+        # TODO: Turns out @property and @x.setter decorators do work, now. Should probably use them, with validation.
 
         self.min_angle = 90
         self.max_angle = 90
