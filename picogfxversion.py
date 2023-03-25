@@ -58,7 +58,7 @@ button_x = Button(14)
 button_y = Button(15)
 
 # Borrowed from Tony Goodhew's PicoDisplay example code
-# FIXME: We're doing this to show arrows. Could probably re-implement with sprites?
+# TODO: We're doing this to show arrows. Could probably re-implement with sprites?
 up_arrow =[0,4,14,21,4,4,0,0]
 down_arrow = [0,4,4,21,14,4,0,0]
 bits = [128,64,32,16,8,4,2,1]  # Powers of 2
@@ -67,7 +67,7 @@ bits = [128,64,32,16,8,4,2,1]  # Powers of 2
 display_mode = 0 # Default
 
 # Print defined character from set above
-# FIXME: If we're drawing arrows with sprites, this won't be necessary.
+# TODO: If we're drawing arrows with sprites, this won't be necessary.
 def draw_char(xpos, ypos, pattern):
     for line in range(8):  # 5x8 characters
         for ii in range(5): # Low value bits only
@@ -435,9 +435,10 @@ class PinButtonController:
         """Check the buttons and call the appropriate method."""
         # Check for button presses
         for button in self._mapping:
-            # FIXME: Gaah, it doesn't look like is_pressed() exists in the new PicoGraphics/PicoDisplay library?!
+            # DONE: Gaah, it doesn't look like is_pressed() exists in the new PicoGraphics/PicoDisplay library?!
             #        Oh, but there is a Button class in pimoroni module (https://github.com/pimoroni/pimoroni-pico/blob/main/micropython/modules_py/pimoroni.py)
             #        ...and that does have is_pressed().
+            # Correction: has Button.is_pressed, it's a property not a call.
             if button.is_pressed and utime.ticks_diff(utime.ticks_ms(), self._time_last_checked) > self.debounce_interval:
                 self._time_last_checked = utime.ticks_ms()
                 # Have to use getattr here for dynamic method call
@@ -556,7 +557,7 @@ if __name__ == '__main__':
 
     # Setting up callbacks for buttons and rotary encoder.
     # This is for the main screen: later modes will pass their own sets here.
-    # FIXME: Buttons are now handled by the Button module, so this will need to be updated.
+    # DONE : Buttons are now handled by the Button module, so this will need to be updated.
     #        Suspect we'll have to instantiate each Button object first, since it isn't predeclared in the
     #        display module now.
     button_mapping_main = {
@@ -625,7 +626,7 @@ if __name__ == '__main__':
 
 
     while True:
-        # FIXME: This will change
+        # DONE: This will change
         display.set_pen(black)
         display.clear()
         # servoD5.draw()
@@ -637,7 +638,7 @@ if __name__ == '__main__':
         rotary.check()
         app_control_button_controller.check()
         app.update()
-        # FIXME: This will change
+        # DONE: This will change
         display.update()
 
         # utime.sleep_ms(20)
