@@ -439,7 +439,10 @@ class PinButtonController:
             #        Oh, but there is a Button class in pimoroni module (https://github.com/pimoroni/pimoroni-pico/blob/main/micropython/modules_py/pimoroni.py)
             #        ...and that does have is_pressed().
             # Correction: has Button.is_pressed, it's a property not a call.
-            if button.is_pressed and utime.ticks_diff(utime.ticks_ms(), self._time_last_checked) > self.debounce_interval:
+            # 2023-03-29 OK, we've built our own button controller, so this next line _does_ have a called to is_pressed()
+            # rather than a check of the is_pressed property. We should bring these two approaches back in line, this
+            # is messy.
+            if button.is_pressed() and utime.ticks_diff(utime.ticks_ms(), self._time_last_checked) > self.debounce_interval:
                 self._time_last_checked = utime.ticks_ms()
                 # Have to use getattr here for dynamic method call
                 getattr(self._mapping[button]['object'], self._mapping[button]['method'])()
@@ -623,7 +626,6 @@ if __name__ == '__main__':
         }
     }
     rotary = RotaryController(rotary_mapping_main)
-
 
     while True:
         # DONE: This will change
