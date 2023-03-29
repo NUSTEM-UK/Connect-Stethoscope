@@ -64,7 +64,7 @@ down_arrow = [0,4,4,21,14,4,0,0]
 bits = [128,64,32,16,8,4,2,1]  # Powers of 2
 
 # Display mode
-display_mode = 0 # Default
+display_mode = 1 # Default
 
 # Print defined character from set above
 # TODO: If we're drawing arrows with sprites, this won't be necessary.
@@ -452,11 +452,15 @@ class ApplicationController:
     """Handle application state changes."""
 
     def __init__(self, object_list, menu_list, application_state=0, num_states=3):
-        """Initialise the controller."""
+        """Initialise the controller.
+
+        Default to the upper servo view (application state 1)."""
         self.application_state = application_state
         self._object_list = object_list
         self._num_states = num_states
         self._menu_list = menu_list
+        # Update devices to force correct drawing.
+        self._handle_state_change()
 
     def increment_state(self):
         """Cycle application state."""
