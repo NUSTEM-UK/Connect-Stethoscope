@@ -28,46 +28,26 @@ Total power supply on pin 36: <300 mA. Stall current of a microservo is ~500 mA,
 import utime
 from machine import Pin
 from servo import Servo
-from pimoroni import Button
-from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY
-# import picodisplay as display # DONE: Update to PicoGraphics
+import picodisplay as display # FIXME: Update to PicoGraphics
 from rotary_irq_rp2 import RotaryIRQ
 
 # Set up and initialise Pico Display
-# DONE: This won't work for PicoGraphics, there's a different way around.
-display = PicoGraphics(display=DISPLAY_PICO_DISPLAY, rotate=0)
-# buf = bytearray(display.get_width() * display.get_height() * 2)
-# display.init(buf)
+# FIXME: This won't work for PicoGraphics, there's a different way around.
+buf = bytearray(display.get_width() * display.get_height() * 2)
+display.init(buf)
 display.set_backlight(0.8)
 
-# Set up colours
-white = display.create_pen(255, 255, 255)
-black = display.create_pen(0, 0, 0)
-red = display.create_pen(255, 0, 0)
-green = display.create_pen(0, 255, 0)
-blue = display.create_pen(0, 0, 255)
-yellow = display.create_pen(255, 255, 0)
-cyan = display.create_pen(0, 255, 255)
-magenta = display.create_pen(255, 0, 255)
-dark_grey = display.create_pen(70, 70, 70)
-
-# Set up buttons
-button_a = Button(12)
-button_b = Button(13)
-button_x = Button(14)
-button_y = Button(15)
-
 # Borrowed from Tony Goodhew's PicoDisplay example code
-# TODO: We're doing this to show arrows. Could probably re-implement with sprites?
+# FIXME: We're doing this to show arrows. Could probably re-implement with sprites?
 up_arrow =[0,4,14,21,4,4,0,0]
 down_arrow = [0,4,4,21,14,4,0,0]
 bits = [128,64,32,16,8,4,2,1]  # Powers of 2
 
 # Display mode
-display_mode = 1 # Default
+display_mode = 0 # Default
 
 # Print defined character from set above
-# TODO: If we're drawing arrows with sprites, this won't be necessary.
+# FIXME: If we're drawing arrows with sprites, this won't be necessary.
 def draw_char(xpos, ypos, pattern):
     for line in range(8):  # 5x8 characters
         for ii in range(5): # Low value bits only
@@ -154,22 +134,21 @@ class ServoController:
 
         # Are we selected? if so, draw a background
         if self.is_selected:
-            # display.set_pen(70, 70, 70)
-            display.set_pen(dark_grey)
+            display.set_pen(70, 70, 70)
             display.rectangle(0, self.vertical_offset - 20, 240, self.vertical_offset + 20)
 
         # Display minimum angle
         # Set pen colour to green if being updated, else yellow
-        display.set_pen(green) if self.min_position_being_updated else display.set_pen(yellow)
+        display.set_pen(0, 255, 0) if self.min_position_being_updated else display.set_pen(255, 255, 0)
         display.text(zfl(str(self.min_angle), 3), 10, self.vertical_offset, 200, 2)
         # printstring(zfl(str(self.min_angle), 3), 10, self.vertical_offset, 1, False, False)
 
         # Display maximum angle
-        display.set_pen(green) if self.max_position_being_updated else display.set_pen(yellow)
+        display.set_pen(0, 255, 0) if self.max_position_being_updated else display.set_pen(255, 255, 0)
         display.text(zfl(str(self.max_angle), 3), 200, self.vertical_offset, 200, 2)
 
         # Draw scale line
-        display.set_pen(white)
+        display.set_pen(255, 255, 255)
         display.rectangle(50, self.vertical_offset + 6, 140, 2)
         # display.pixel_span(50, self.vertical_offset + 6, 140)
         # display.pixel_span(50, self.vertical_offset + 7, 140)
@@ -183,7 +162,7 @@ class ServoController:
 
         # Draw position marker
         self._marker_pos = rescale(self.angle, 0, 180, 50, 140 + 50) - 10
-        display.set_pen(red)
+        display.set_pen(255, 0, 0)
         # I don't know why this print is necessary, but without it the code blows up after a very short time.
         # print(self._marker_pos, self.vertical_offset + 13 + self.marker_offset)
         draw_char(self._marker_pos, self.vertical_offset + 13 + self.marker_offset, self.marker)
@@ -195,31 +174,31 @@ class ServoController:
             # Display speed data
             if self.vertical_offset == 90:
                 # Display speed by other button
-                display.set_pen(green) if self.speed_being_updated else display.set_pen(yellow)
+                display.set_pen(0, 255, 0) if self.speed_being_updated else display.set_pen(255, 255, 0)
                 display.text(zfl(str(self.speed), 3) + " SPD", 10, 20, 200, 2)
                 # DIsplay current angle in centre space
-                display.set_pen(green) if self.position_being_updated else display.set_pen(yellow)
+                display.set_pen(0, 255, 0) if self.position_being_updated else display.set_pen(255, 255, 0)
                 display.text(zfl(str(int(self.angle)), 3), 95, 45, 200, 4)
                 # Display RUN/STOP text
                 if self.is_running:
-                    display.set_pen(red)
+                    display.set_pen(255, 0, 0)
                     display.text("STOP", 190, 25, 200, 2)
                 else:
-                    display.set_pen(green)
+                    display.set_pen(0, 255, 0)
                     display.text(" RUN", 190, 25, 200, 2)
             else:
                 # Display speed setting by lower-left button
-                display.set_pen(green) if self.speed_being_updated else display.set_pen(yellow)
+                display.set_pen(0, 255, 0) if self.speed_being_updated else display.set_pen(255, 255, 0)
                 display.text(zfl(str(self.speed), 3) + " SPD", 10, self.vertical_offset + 75, 200, 2)
                 # Display current angle in centre space
-                display.set_pen(green) if self.position_being_updated else display.set_pen(yellow)
+                display.set_pen(0, 255, 0) if self.position_being_updated else display.set_pen(255, 255, 0)
                 display.text(zfl(str(int(self.angle)), 3), 95, self.vertical_offset + 35, 200, 4)
                 # Display RUN/STOP legend by lower right button
                 if self.is_running:
-                    display.set_pen(red)
+                    display.set_pen(255, 0, 0)
                     display.text("STOP", 190, self.vertical_offset + 75, 200, 2)
                 else:
-                    display.set_pen(green)
+                    display.set_pen(0, 255, 0)
                     display.text(" RUN", 190, self.vertical_offset + 75, 200, 2)
 
 
@@ -416,7 +395,7 @@ class ButtonController:
         """Check the buttons and call the appropriate method."""
         # Check for button presses
         for button in self._mapping:
-            if button.is_pressed and utime.ticks_diff(utime.ticks_ms(), self._time_last_checked) > self.debounce_interval:
+            if display.is_pressed(button) and utime.ticks_diff(utime.ticks_ms(), self._time_last_checked) > self.debounce_interval:
                 self._time_last_checked = utime.ticks_ms()
                 # Have to use getattr here for dynamic method call
                 getattr(self._mapping[button]['object'], self._mapping[button]['method'])()
@@ -435,13 +414,9 @@ class PinButtonController:
         """Check the buttons and call the appropriate method."""
         # Check for button presses
         for button in self._mapping:
-            # DONE: Gaah, it doesn't look like is_pressed() exists in the new PicoGraphics/PicoDisplay library?!
+            # FIXME: Gaah, it doesn't look like is_pressed() exists in the new PicoGraphics/PicoDisplay library?!
             #        Oh, but there is a Button class in pimoroni module (https://github.com/pimoroni/pimoroni-pico/blob/main/micropython/modules_py/pimoroni.py)
             #        ...and that does have is_pressed().
-            # Correction: has Button.is_pressed, it's a property not a call.
-            # 2023-03-29 OK, we've built our own button controller, so this next line _does_ have a called to is_pressed()
-            # rather than a check of the is_pressed property. We should bring these two approaches back in line, this
-            # is messy.
             if button.is_pressed() and utime.ticks_diff(utime.ticks_ms(), self._time_last_checked) > self.debounce_interval:
                 self._time_last_checked = utime.ticks_ms()
                 # Have to use getattr here for dynamic method call
@@ -452,15 +427,11 @@ class ApplicationController:
     """Handle application state changes."""
 
     def __init__(self, object_list, menu_list, application_state=0, num_states=3):
-        """Initialise the controller.
-
-        Default to the upper servo view (application state 1)."""
+        """Initialise the controller."""
         self.application_state = application_state
         self._object_list = object_list
         self._num_states = num_states
         self._menu_list = menu_list
-        # Update devices to force correct drawing.
-        self._handle_state_change()
 
     def increment_state(self):
         """Cycle application state."""
@@ -553,7 +524,7 @@ if __name__ == '__main__':
     servoD7 = ServoController(pin=3, speed=60, vertical_offset=90, marker=down_arrow, marker_offset=-25)
 
     # For some reason, we need to draw everything once, or the methods error out in the loop. weird.
-    display.set_pen(black)
+    display.set_pen(0, 0, 0)
     display.clear()
     servoD5.draw()
     servoD7.draw()
@@ -564,39 +535,39 @@ if __name__ == '__main__':
 
     # Setting up callbacks for buttons and rotary encoder.
     # This is for the main screen: later modes will pass their own sets here.
-    # DONE : Buttons are now handled by the Button module, so this will need to be updated.
+    # FIXME: Buttons are now handled by the Button module, so this will need to be updated.
     #        Suspect we'll have to instantiate each Button object first, since it isn't predeclared in the
     #        display module now.
     button_mapping_main = {
-        button_a: {
+        display.BUTTON_A: {
             "object": servoD5, "method": "min_position_setting_toggle" },
-        button_x: {
+        display.BUTTON_X: {
             "object": servoD5, "method": "max_position_setting_toggle" },
-        button_b: {
+        display.BUTTON_B: {
             "object": servoD7, "method": "min_position_setting_toggle" },
-        button_y: {
+        display.BUTTON_Y: {
             "object": servoD7, "method": "max_position_setting_toggle" }
     }
 
     button_mapping_servoD5 = {
-        button_a: {
+        display.BUTTON_A: {
             "object": servoD5, "method": "position_and_min_setting_toggle" },
-        button_x: {
+        display.BUTTON_X: {
             "object": servoD5, "method": "position_and_max_setting_toggle" },
-        button_b: {
+        display.BUTTON_B: {
             "object": servoD5, "method": "speed_setting_toggle" },
-        button_y: {
+        display.BUTTON_Y: {
             "object": servoD5, "method": "toggle_run" }
     }
 
     button_mapping_servoD7 = {
-        button_a: {
+        display.BUTTON_A: {
             "object": servoD7, "method": "speed_setting_toggle" },
-        button_x: {
+        display.BUTTON_X: {
             "object": servoD7, "method": "toggle_run" },
-        button_b: {
+        display.BUTTON_B: {
             "object": servoD7, "method": "position_and_min_setting_toggle" },
-        button_y: {
+        display.BUTTON_Y: {
             "object": servoD7, "method": "position_and_max_setting_toggle" }
     }
 
@@ -631,9 +602,10 @@ if __name__ == '__main__':
     }
     rotary = RotaryController(rotary_mapping_main)
 
+
     while True:
-        # DONE: This will change
-        display.set_pen(black)
+        # FIXME: This will change
+        display.set_pen(0, 0, 0)
         display.clear()
         # servoD5.draw()
         # servoD7.draw()
@@ -644,7 +616,7 @@ if __name__ == '__main__':
         rotary.check()
         app_control_button_controller.check()
         app.update()
-        # DONE: This will change
+        # FIXME: This will change
         display.update()
 
         # utime.sleep_ms(20)
