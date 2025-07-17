@@ -1,7 +1,8 @@
 """Servo controller module for Connect-Stethoscope project."""
 
 import utime
-from servo import Servo
+from animation import EasedServo
+import easingfunctions as easing
 
 
 def rescale(x, in_min, in_max, out_min, out_max):
@@ -51,14 +52,19 @@ class ServoController:
     """Visual and serial interface for servo control.
     """
 
-    def __init__(self, pin, angle=90, speed=20, vertical_offset=25, marker=up_arrow, marker_offset=0):
+    def __init__(self, pin, angle=90, speed=20, vertical_offset=25, marker=up_arrow, marker_offset=0, interpolation=easing.linear):
         """Initialise the controller, with vaguely sane defaults."""
-        self._servo = Servo(pin)
+        # Convert initial angle to servo space (-90 to +90)
+        servo_angle = angle - 90
+        self._servo = EasedServo(pin, servo_angle)
+        # Initialize the servo as not moving until we give it a command
+        self._servo.isMoving = False
         self.angle = angle
         self.speed = speed
         self.vertical_offset = vertical_offset
         self.marker = marker
         self.marker_offset = marker_offset
+        self.interpolation = interpolation
 
         # TODO: I don't think @property/getter/setter decorators work
         #       in Micropython, so it's a pain to do input validation.
@@ -169,9 +175,14 @@ class ServoController:
 
     def move(self):
         """Move the servo to the current position."""
-        # self._servo.value(rescale(self.angle, 0, 180, -90, 90))
-        self._servo.value(int(self.angle - 90))
-        # self._servo.value(self.angle - 90)
+        # Convert from 0-180 range to -90/+90 range for servo
+        servo_angle = int(self.angle - 90)
+        print(f"Moving servo: display_angle={self.angle}, servo_angle={servo_angle}")
+
+        # Use EasedServo's value method directly for immediate positioning
+        self._servo.value(servo_angle)
+        # Also update the EasedServo's angle property to keep it in sync (in servo space)
+        self._servo.angle = servo_angle
 
     def min_position_setting_toggle(self):
         self.min_position_being_updated = not self.min_position_being_updated
@@ -196,6 +207,7 @@ class ServoController:
         if self.min_position_being_updated:
             self.max_position_being_updated = False
             self.speed_being_updated = False
+            self.move()  # Update the EasedServo position immediately
 
     def position_and_max_setting_toggle(self):
         self.max_position_being_updated = not self.max_position_being_updated
@@ -204,6 +216,7 @@ class ServoController:
         if self.max_position_being_updated:
             self.min_position_being_updated = False
             self.speed_being_updated = False
+            self.move()  # Update the EasedServo position immediately
 
     def speed_setting_toggle(self):
         self.speed_being_updated = not self.speed_being_updated
@@ -221,6 +234,10 @@ class ServoController:
         self.position_being_updated = False
         self.speed_being_updated = False
 
+        # Stop the EasedServo if we're stopping
+        if not self.is_running:
+            self._servo.isMoving = False
+
     def run(self):
         """Start, or keep going."""
         self.is_running = True
@@ -228,6 +245,8 @@ class ServoController:
     def stop(self):
         """Stop, or stay stopped."""
         self.is_running = False
+        # Stop the EasedServo
+        self._servo.isMoving = False
 
     def display_small(self):
         """Display minimal bar only."""
@@ -266,6 +285,7 @@ class ServoController:
             self.angle += 2
             if self.angle > 180:
                 self.angle = 180
+            self.move()  # Update the EasedServo position immediately
 
         # print(f"[{self.min_angle}, {self.max_angle}]")
 
@@ -296,27 +316,39 @@ class ServoController:
             self.angle -= 2
             if self.angle < 0:
                 self.angle = 0
+            self.move()  # Update the EasedServo position immediately
 
     def update(self):
         """Update the servo position."""
 
-        # Calculate angular movement since last update
-        self._time_delta = utime.ticks_diff(utime.ticks_ms(), self._time_ref)
-        self._time_ref = utime.ticks_ms()
-        self._angle_delta = self.speed * self._time_delta / 1000
+        # Only update the EasedServo if it's currently moving and has been initialized with timing info
+        if self._servo.isMoving and hasattr(self._servo, '_base_time'):
+            self._servo.update()
+            # Get the current angle from the EasedServo and convert back to display angle (0-180)
+            servo_angle = self._servo.get_current_angle()
+            self.angle = servo_angle + 90
+            print(f"Updated from servo: servo_angle={servo_angle}, display_angle={self.angle}")
 
-        # Update angular position, catching end points
+        # Handle reversing when running
         if self.is_running:
-            if self._reversing:
-                self.angle -= self._angle_delta
-                if self.angle < self.min_angle:
-                    self.angle = self.min_angle
+            # If servo is not currently moving, start a new move
+            if not self._servo.isMoving:
+                print(f"Current angle: {self.angle}, min: {self.min_angle}, max: {self.max_angle}, reversing: {self._reversing}")
+                if self._reversing:
+                    # Move to minimum angle
+                    angle_diff = abs(self.angle - self.min_angle)
+                    if angle_diff > 0:  # Only move if there's a difference
+                        duration = angle_diff / self.speed * 1000  # Convert to milliseconds
+                        print(f"Moving to min_angle {self.min_angle} (servo: {self.min_angle - 90}) in {duration}ms")
+                        # Convert to servo angle space (-90 to +90) for EasedServo
+                        self._servo.ease_to(self.min_angle - 90, max(int(duration), 1), self.interpolation)
                     self._reversing = False
-            else:
-                self.angle += self._angle_delta
-                if self.angle > self.max_angle:
-                    self.angle = self.max_angle
+                else:
+                    # Move to maximum angle
+                    angle_diff = abs(self.angle - self.max_angle)
+                    if angle_diff > 0:  # Only move if there's a difference
+                        duration = angle_diff / self.speed * 1000  # Convert to milliseconds
+                        print(f"Moving to max_angle {self.max_angle} (servo: {self.max_angle - 90}) in {duration}ms")
+                        # Convert to servo angle space (-90 to +90) for EasedServo
+                        self._servo.ease_to(self.max_angle - 90, max(int(duration), 1), self.interpolation)
                     self._reversing = True
-
-        # Update physical servo position
-        self.move()
