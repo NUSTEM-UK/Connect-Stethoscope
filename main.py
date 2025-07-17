@@ -27,11 +27,11 @@ Total power supply on pin 36: <300 mA. Stall current of a microservo is ~500 mA,
 
 import utime
 from machine import Pin
-from servo import Servo
 from pimoroni import Button
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY
 # import picodisplay as display # DONE: Update to PicoGraphics
 from rotary_irq_rp2 import RotaryIRQ
+from servo_controller import ServoController
 
 # Set up and initialise Pico Display
 # DONE: This won't work for PicoGraphics, there's a different way around.
@@ -57,47 +57,8 @@ button_b = Button(13)
 button_x = Button(14)
 button_y = Button(15)
 
-# Borrowed from Tony Goodhew's PicoDisplay example code
-# TODO: We're doing this to show arrows. Could probably re-implement with sprites?
-up_arrow =[0,4,14,21,4,4,0,0]
-down_arrow = [0,4,4,21,14,4,0,0]
-bits = [128,64,32,16,8,4,2,1]  # Powers of 2
-
 # Display mode
 display_mode = 1 # Default
-
-# Print defined character from set above
-# TODO: If we're drawing arrows with sprites, this won't be necessary.
-def draw_char(xpos, ypos, pattern):
-    for line in range(8):  # 5x8 characters
-        for ii in range(5): # Low value bits only
-            i = ii + 3
-            dot = pattern[line] & bits[i] # Extract bit
-            if dot: # print white dots
-                display.pixel(xpos+i*2, ypos+line*2)
-                display.pixel(xpos+i*2, ypos+line*2+1)
-                display.pixel(xpos+i*2+1, ypos+line*2)
-                display.pixel(xpos+i*2+1, ypos+line*2+1)
-
-
-def rescale(x, in_min, in_max, out_min, out_max):
-    """Rescale a value from one range to another."""
-    # print(x, in_min, in_max, out_min, out_max)
-    # Check for range zero
-    if in_max - in_min == 0:
-        print("RESCALE: Caught a divide by zero.")
-        return out_min
-    else:
-        return int((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min)
-
-
-def zfl(s, width=3, padchar='0'):
-    """Pads string with leading zeros.
-
-    From https://stackoverflow.com/questions/63271522/is-there-a-zfill-type-function-in-micro-python-zfill-in-micro-python
-    then extended for variable fill character. There's no zfill() in Micropython, so... here we are."""
-    # return '{:0>{w}}'.format(s, w=width)
-    return '{:{p}>{w}}'.format(s, w=width, p=padchar)
 
 
 def increment_application_mode():
@@ -106,279 +67,6 @@ def increment_application_mode():
     display_mode += 1
     if display_mode > 1:
         display_mode = 0
-
-
-class ServoController:
-    """Visual and serial interface for servo control.
-    """
-
-    def __init__(self, pin, angle=90, speed=20, vertical_offset=25, marker=up_arrow, marker_offset=0):
-        """Initialise the controller, with vaguely sane defaults."""
-        self._servo = Servo(pin)
-        self.angle = angle
-        self.speed = speed
-        self.vertical_offset = vertical_offset
-        self.marker = marker
-        self.marker_offset = marker_offset
-
-        # TODO: I don't think @property/getter/setter decorators work
-        #       in Micropython, so it's a pain to do input validation.
-        #       But equally, I can't find any documentation on this. Sigh.
-        # TODO: Turns out @property and @x.setter decorators do work, now. Should probably use them, with validation.
-
-        self.min_angle = 90
-        self.max_angle = 90
-
-        self._min_display_position = 0
-        self._max_display_position = 180
-
-        self._reversing = False
-        self.display_mode = 0   # 'normal'
-
-        # Booleans to determine pen colour for drawing values
-        self.min_position_being_updated = False
-        self.max_position_being_updated = False
-        self.position_being_updated = False
-        self.speed_being_updated = False
-        self.is_selected = False
-        self.is_running = False
-
-        # Set a time reference
-        self._time_ref = utime.ticks_ms()
-
-    def draw(self):
-        """Draw the servo on the display.
-
-        Also, write position to servo."""
-        # FIXME: should mostly 'just work' if we establish the display object correctly.
-
-        # Are we selected? if so, draw a background
-        if self.is_selected:
-            # display.set_pen(70, 70, 70)
-            display.set_pen(dark_grey)
-            display.rectangle(0, self.vertical_offset - 20, 240, self.vertical_offset + 20)
-
-        # Display minimum angle
-        # Set pen colour to green if being updated, else yellow
-        display.set_pen(green) if self.min_position_being_updated else display.set_pen(yellow)
-        display.text(zfl(str(self.min_angle), 3), 10, self.vertical_offset, 200, 2)
-        # printstring(zfl(str(self.min_angle), 3), 10, self.vertical_offset, 1, False, False)
-
-        # Display maximum angle
-        display.set_pen(green) if self.max_position_being_updated else display.set_pen(yellow)
-        display.text(zfl(str(self.max_angle), 3), 200, self.vertical_offset, 200, 2)
-
-        # Draw scale line
-        display.set_pen(white)
-        display.rectangle(50, self.vertical_offset + 6, 140, 2)
-        # display.pixel_span(50, self.vertical_offset + 6, 140)
-        # display.pixel_span(50, self.vertical_offset + 7, 140)
-        # display.update()
-
-        # Draw movement end tic marks
-        self._tick_min = rescale(self.min_angle, 0, 180, 50, 140 + 50)
-        self._tick_max = rescale(self.max_angle, 0, 180, 50, 140 + 50)
-        display.rectangle(self._tick_min, self.vertical_offset + 2, 2, 10)
-        display.rectangle(self._tick_max, self.vertical_offset + 2, 2, 10)
-
-        # Draw position marker
-        self._marker_pos = rescale(self.angle, 0, 180, 50, 140 + 50) - 10
-        display.set_pen(red)
-        # I don't know why this print is necessary, but without it the code blows up after a very short time.
-        # print(self._marker_pos, self.vertical_offset + 13 + self.marker_offset)
-        draw_char(self._marker_pos, self.vertical_offset + 13 + self.marker_offset, self.marker)
-        # Update physical servo position, correcting for angle range
-        # self._servo.value((self.angle + 90) % 180)
-        # self._servo.value(rescale(self.angle, -90, 90, 0, 180))
-
-        if self.display_mode == 1:
-            # Display speed data
-            if self.vertical_offset == 90:
-                # Display speed by other button
-                display.set_pen(green) if self.speed_being_updated else display.set_pen(yellow)
-                display.text(zfl(str(self.speed), 3) + " SPD", 10, 20, 200, 2)
-                # DIsplay current angle in centre space
-                display.set_pen(green) if self.position_being_updated else display.set_pen(yellow)
-                display.text(zfl(str(int(self.angle)), 3), 95, 45, 200, 4)
-                # Display RUN/STOP text
-                if self.is_running:
-                    display.set_pen(red)
-                    display.text("STOP", 190, 25, 200, 2)
-                else:
-                    display.set_pen(green)
-                    display.text(" RUN", 190, 25, 200, 2)
-            else:
-                # Display speed setting by lower-left button
-                display.set_pen(green) if self.speed_being_updated else display.set_pen(yellow)
-                display.text(zfl(str(self.speed), 3) + " SPD", 10, self.vertical_offset + 75, 200, 2)
-                # Display current angle in centre space
-                display.set_pen(green) if self.position_being_updated else display.set_pen(yellow)
-                display.text(zfl(str(int(self.angle)), 3), 95, self.vertical_offset + 35, 200, 4)
-                # Display RUN/STOP legend by lower right button
-                if self.is_running:
-                    display.set_pen(red)
-                    display.text("STOP", 190, self.vertical_offset + 75, 200, 2)
-                else:
-                    display.set_pen(green)
-                    display.text(" RUN", 190, self.vertical_offset + 75, 200, 2)
-
-
-    def move(self):
-        """Move the servo to the current position."""
-        # self._servo.value(rescale(self.angle, 0, 180, -90, 90))
-        self._servo.value(int(self.angle - 90))
-        # self._servo.value(self.angle - 90)
-
-    def min_position_setting_toggle(self):
-        self.min_position_being_updated = not self.min_position_being_updated
-        # Deselect the other thing if appropriate
-        if self.min_position_being_updated:
-            self.max_position_being_updated = False
-            self.speed_being_updated = False
-            self.is_running = False
-
-    def max_position_setting_toggle(self):
-        self.max_position_being_updated = not self.max_position_being_updated
-        # Deselect the other thing if appropriate
-        if self.max_position_being_updated:
-            self.min_position_being_updated = False
-            self.speed_being_updated = False
-            self.is_running = False
-
-    def position_and_min_setting_toggle(self):
-        self.min_position_being_updated = not self.min_position_being_updated
-        self.position_being_updated = self.min_position_being_updated
-        self.angle = self.min_angle
-        if self.min_position_being_updated:
-            self.max_position_being_updated = False
-            self.speed_being_updated = False
-
-    def position_and_max_setting_toggle(self):
-        self.max_position_being_updated = not self.max_position_being_updated
-        self.position_being_updated = self.max_position_being_updated
-        self.angle = self.max_angle
-        if self.max_position_being_updated:
-            self.min_position_being_updated = False
-            self.speed_being_updated = False
-
-    def speed_setting_toggle(self):
-        self.speed_being_updated = not self.speed_being_updated
-        # Deselect the other things if appropriate
-        if self.speed_being_updated:
-            self.min_position_being_updated = False
-            self.max_position_being_updated = False
-            self.position_being_updated = False
-
-    def toggle_run(self):
-        """Toggle run state."""
-        self.is_running = not self.is_running
-        self.min_position_being_updated = False
-        self.max_position_being_updated = False
-        self.position_being_updated = False
-        self.speed_being_updated = False
-
-    def run(self):
-        """Start, or keep going."""
-        self.is_running = True
-
-    def stop(self):
-        """Stop, or stay stopped."""
-        self.is_running = False
-
-    def display_small(self):
-        """Display minimal bar only."""
-        self.display_mode = 0
-
-    def display_full(self):
-        """Display detailed view."""
-        self.display_mode = 1
-
-    def increment_value(self):
-        """Increment whatever we're incrementing.
-
-        Keep it within bounds.
-        """
-        # print(">>> Incrementing")
-        if self.min_position_being_updated:
-            self.min_angle += 2
-            if self.min_angle > 180:
-                self.min_angle = 180
-
-        if self.max_position_being_updated:
-            self.max_angle += 2
-            if self.max_angle > 180:
-                self.max_angle = 180
-
-        # if we're moving min and it's > max, increment max also
-        if self.min_angle > self.max_angle:
-            self.max_angle = self.min_angle
-
-        if self.speed_being_updated:
-            self.speed += 2
-            if self.speed > 150:
-                self.speed = 150
-
-        if self.position_being_updated:
-            self.angle += 2
-            if self.angle > 180:
-                self.angle = 180
-
-
-        # print(f"[{self.min_angle}, {self.max_angle}]")
-
-    def decrement_value(self):
-        """Decrement whatever we're decrementing.
-
-        Keep it within bounds.
-        """
-        if self.min_position_being_updated:
-            self.min_angle -= 2
-            if self.min_angle < 0:
-                self.min_angle = 0
-
-        if self.max_position_being_updated:
-            self.max_angle -= 2
-            if self.max_angle < 0:
-                self.max_angle = 0
-
-        if self.max_angle < self.min_angle:
-            self.min_angle = self.max_angle
-
-
-        if self.speed_being_updated:
-            self.speed -= 1
-            if self.speed < 1:
-                self.speed = 1
-
-        if self.position_being_updated:
-            self.angle -= 2
-            if self.angle < 0:
-                self.angle = 0
-
-
-    def update(self):
-        """Update the servo position."""
-
-        # Calculate angular movement since last update
-        self._time_delta = utime.ticks_diff(utime.ticks_ms(), self._time_ref)
-        self._time_ref = utime.ticks_ms()
-        self._angle_delta = self.speed * self._time_delta / 1000
-
-        # Update angular position, catching end points
-        if self.is_running:
-            if self._reversing:
-                self.angle -= self._angle_delta
-                if self.angle < self.min_angle:
-                    self.angle = self.min_angle
-                    self._reversing = False
-            else:
-                self.angle += self._angle_delta
-                if self.angle > self.max_angle:
-                    self.angle = self.max_angle
-                    self._reversing = True
-
-        # Update physical servo position
-        self.move()
 
 
 class PinButton:
@@ -451,7 +139,7 @@ class PinButtonController:
 class ApplicationController:
     """Handle application state changes."""
 
-    def __init__(self, object_list, menu_list, application_state=0, num_states=3):
+    def __init__(self, object_list, menu_list, display, colors, application_state=0, num_states=3):
         """Initialise the controller.
 
         Default to the upper servo view (application state 1)."""
@@ -459,6 +147,8 @@ class ApplicationController:
         self._object_list = object_list
         self._num_states = num_states
         self._menu_list = menu_list
+        self._display = display
+        self._colors = colors
         # Update devices to force correct drawing.
         self._handle_state_change()
 
@@ -491,15 +181,15 @@ class ApplicationController:
             self._menu_list[0].check()
             for thing in self._object_list:
                 thing.update()
-                thing.draw()
+                thing.draw(self._display, self._colors)
         elif self.application_state == 1:
             self._menu_list[1].check()
             self._object_list[0].update()
-            self._object_list[0].draw()
+            self._object_list[0].draw(self._display, self._colors)
         elif self.application_state == 2:
             self._menu_list[2].check()
             self._object_list[1].update()
-            self._object_list[1].draw()
+            self._object_list[1].draw(self._display, self._colors)
 
 class RotaryController():
     """Read rotary encoder value and dispatch accordingly.
@@ -549,14 +239,27 @@ class RotaryController():
 if __name__ == '__main__':
     print("Starting...")
 
+    # Create colors dictionary for ServoController
+    colors = {
+        'white': white,
+        'black': black,
+        'red': red,
+        'green': green,
+        'blue': blue,
+        'yellow': yellow,
+        'cyan': cyan,
+        'magenta': magenta,
+        'dark_grey': dark_grey
+    }
+
     servoD5 = ServoController(2)
     servoD7 = ServoController(pin=3, speed=60, vertical_offset=90, marker=down_arrow, marker_offset=-25)
 
     # For some reason, we need to draw everything once, or the methods error out in the loop. weird.
     display.set_pen(black)
     display.clear()
-    servoD5.draw()
-    servoD7.draw()
+    servoD5.draw(display, colors)
+    servoD7.draw(display, colors)
     display.update()
 
     application_mode = 0       # Default animation playback mode
@@ -606,7 +309,7 @@ if __name__ == '__main__':
     buttons2 = ButtonController(button_mapping_servoD7)
 
     # TODO: Look! Look! We're even passing a tuple of the objects into ApplicationController!
-    app = ApplicationController((servoD5, servoD7), (buttons0, buttons1, buttons2), 0, 3)
+    app = ApplicationController((servoD5, servoD7), (buttons0, buttons1, buttons2), display, colors, 0, 3)
 
     # Rotary encoder button
     # Shorts to ground when pressed
