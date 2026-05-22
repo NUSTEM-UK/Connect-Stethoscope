@@ -4,6 +4,15 @@ import utime
 from animation import EasedServo
 import easingfunctions as easing
 
+# Available interpolation types for user selection
+# TODO: Add more easing functions once we verify what's available in easingfunctions module
+INTERPOLATION_TYPES = [
+    ("Linear", easing.linear),
+    ("Quadratic", easing.easeInOutQuad),
+    ("Expo In", easing.easeInExpo),
+    ("Expo Out", easing.easeOutExpo),       # Placeholder - replace with actual function
+]
+
 
 def rescale(x, in_min, in_max, out_min, out_max):
     """Rescale a value from one range to another."""
@@ -52,7 +61,7 @@ class ServoController:
     """Visual and serial interface for servo control.
     """
 
-    def __init__(self, pin, angle=90, speed=20, vertical_offset=25, marker=up_arrow, marker_offset=0, interpolation=easing.linear):
+    def __init__(self, pin, angle=90, speed=50, vertical_offset=25, marker=up_arrow, marker_offset=0, interpolation=easing.linear):
         """Initialise the controller, with vaguely sane defaults."""
         # Convert initial angle to servo space (-90 to +90)
         servo_angle = angle - 90
@@ -65,6 +74,13 @@ class ServoController:
         self.marker = marker
         self.marker_offset = marker_offset
         self.interpolation = interpolation
+
+        # Find the index of the current interpolation function
+        self.interpolation_index = 0
+        for i, (name, func) in enumerate(INTERPOLATION_TYPES):
+            if func == interpolation:
+                self.interpolation_index = i
+                break
 
         # TODO: I don't think @property/getter/setter decorators work
         #       in Micropython, so it's a pain to do input validation.
@@ -84,7 +100,7 @@ class ServoController:
         self.min_position_being_updated = False
         self.max_position_being_updated = False
         self.position_being_updated = False
-        self.speed_being_updated = False
+        self.interpolation_being_updated = False
         self.is_selected = False
         self.is_running = False
 
@@ -143,12 +159,14 @@ class ServoController:
         # self._servo.value(rescale(self.angle, -90, 90, 0, 180))
 
         if self.display_mode == 1:
-            # Display speed data
+            # Display interpolation type data
             if self.vertical_offset == 90:
-                # Display speed by other button
-                display.set_pen(colors['green']) if self.speed_being_updated else display.set_pen(colors['yellow'])
-                display.text(zfl(str(self.speed), 3) + " SPD", 10, 20, 200, 2)
-                # DIsplay current angle in centre space
+                # Display interpolation type by other button
+                display.set_pen(colors['green']) if self.interpolation_being_updated else display.set_pen(colors['yellow'])
+                interp_name = INTERPOLATION_TYPES[self.interpolation_index][0]
+                # display.text(interp_name[:8], 10, 20, 200, 2)  # Truncate to 8 chars to fit
+                display.text(interp_name, 10, 20, 200, 2)
+                # Display current angle in centre space
                 display.set_pen(colors['green']) if self.position_being_updated else display.set_pen(colors['yellow'])
                 display.text(zfl(str(int(self.angle)), 3), 95, 45, 200, 4)
                 # Display RUN/STOP text
@@ -159,9 +177,11 @@ class ServoController:
                     display.set_pen(colors['green'])
                     display.text(" RUN", 190, 25, 200, 2)
             else:
-                # Display speed setting by lower-left button
-                display.set_pen(colors['green']) if self.speed_being_updated else display.set_pen(colors['yellow'])
-                display.text(zfl(str(self.speed), 3) + " SPD", 10, self.vertical_offset + 75, 200, 2)
+                # Display interpolation type setting by lower-left button
+                display.set_pen(colors['green']) if self.interpolation_being_updated else display.set_pen(colors['yellow'])
+                interp_name = INTERPOLATION_TYPES[self.interpolation_index][0]
+                # display.text(interp_name[:8], 10, self.vertical_offset + 75, 200, 2)  # Truncate to 8 chars to fit
+                display.text(interp_name, 10, self.vertical_offset + 75, 200, 2)
                 # Display current angle in centre space
                 display.set_pen(colors['green']) if self.position_being_updated else display.set_pen(colors['yellow'])
                 display.text(zfl(str(int(self.angle)), 3), 95, self.vertical_offset + 35, 200, 4)
@@ -189,7 +209,7 @@ class ServoController:
         # Deselect the other thing if appropriate
         if self.min_position_being_updated:
             self.max_position_being_updated = False
-            self.speed_being_updated = False
+            self.interpolation_being_updated = False
             self.is_running = False
 
     def max_position_setting_toggle(self):
@@ -197,7 +217,7 @@ class ServoController:
         # Deselect the other thing if appropriate
         if self.max_position_being_updated:
             self.min_position_being_updated = False
-            self.speed_being_updated = False
+            self.interpolation_being_updated = False
             self.is_running = False
 
     def position_and_min_setting_toggle(self):
@@ -206,7 +226,7 @@ class ServoController:
         self.angle = self.min_angle
         if self.min_position_being_updated:
             self.max_position_being_updated = False
-            self.speed_being_updated = False
+            self.interpolation_being_updated = False
             self.move()  # Update the EasedServo position immediately
 
     def position_and_max_setting_toggle(self):
@@ -215,13 +235,13 @@ class ServoController:
         self.angle = self.max_angle
         if self.max_position_being_updated:
             self.min_position_being_updated = False
-            self.speed_being_updated = False
+            self.interpolation_being_updated = False
             self.move()  # Update the EasedServo position immediately
 
-    def speed_setting_toggle(self):
-        self.speed_being_updated = not self.speed_being_updated
+    def interpolation_setting_toggle(self):
+        self.interpolation_being_updated = not self.interpolation_being_updated
         # Deselect the other things if appropriate
-        if self.speed_being_updated:
+        if self.interpolation_being_updated:
             self.min_position_being_updated = False
             self.max_position_being_updated = False
             self.position_being_updated = False
@@ -232,7 +252,7 @@ class ServoController:
         self.min_position_being_updated = False
         self.max_position_being_updated = False
         self.position_being_updated = False
-        self.speed_being_updated = False
+        self.interpolation_being_updated = False
 
         # Stop the EasedServo if we're stopping
         if not self.is_running:
@@ -276,10 +296,11 @@ class ServoController:
         if self.min_angle > self.max_angle:
             self.max_angle = self.min_angle
 
-        if self.speed_being_updated:
-            self.speed += 2
-            if self.speed > 150:
-                self.speed = 150
+        if self.interpolation_being_updated:
+            # Cycle to next interpolation type
+            self.interpolation_index = (self.interpolation_index + 1) % len(INTERPOLATION_TYPES)
+            self.interpolation = INTERPOLATION_TYPES[self.interpolation_index][1]
+            print(f"Interpolation changed to: {INTERPOLATION_TYPES[self.interpolation_index][0]}")
 
         if self.position_being_updated:
             self.angle += 2
@@ -307,10 +328,11 @@ class ServoController:
         if self.max_angle < self.min_angle:
             self.min_angle = self.max_angle
 
-        if self.speed_being_updated:
-            self.speed -= 1
-            if self.speed < 1:
-                self.speed = 1
+        if self.interpolation_being_updated:
+            # Cycle to previous interpolation type
+            self.interpolation_index = (self.interpolation_index - 1) % len(INTERPOLATION_TYPES)
+            self.interpolation = INTERPOLATION_TYPES[self.interpolation_index][1]
+            print(f"Interpolation changed to: {INTERPOLATION_TYPES[self.interpolation_index][0]}")
 
         if self.position_being_updated:
             self.angle -= 2

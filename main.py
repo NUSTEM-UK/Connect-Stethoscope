@@ -31,7 +31,7 @@ from pimoroni import Button
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY
 # import picodisplay as display # DONE: Update to PicoGraphics
 from rotary_irq_rp2 import RotaryIRQ
-from servo_controller import ServoController
+from servo_controller import ServoController, up_arrow, down_arrow
 
 # Set up and initialise Pico Display
 # DONE: This won't work for PicoGraphics, there's a different way around.
@@ -139,7 +139,7 @@ class PinButtonController:
 class ApplicationController:
     """Handle application state changes."""
 
-    def __init__(self, object_list, menu_list, display, colors, application_state=0, num_states=3):
+    def __init__(self, object_list, menu_list, display, colors, application_state=1, num_states=3):
         """Initialise the controller.
 
         Default to the upper servo view (application state 1)."""
@@ -287,14 +287,14 @@ if __name__ == '__main__':
         button_x: {
             "object": servoD5, "method": "position_and_max_setting_toggle" },
         button_b: {
-            "object": servoD5, "method": "speed_setting_toggle" },
+            "object": servoD5, "method": "interpolation_setting_toggle" },
         button_y: {
             "object": servoD5, "method": "toggle_run" }
     }
 
     button_mapping_servoD7 = {
         button_a: {
-            "object": servoD7, "method": "speed_setting_toggle" },
+            "object": servoD7, "method": "interpolation_setting_toggle" },
         button_x: {
             "object": servoD7, "method": "toggle_run" },
         button_b: {
@@ -309,7 +309,7 @@ if __name__ == '__main__':
     buttons2 = ButtonController(button_mapping_servoD7)
 
     # TODO: Look! Look! We're even passing a tuple of the objects into ApplicationController!
-    app = ApplicationController((servoD5, servoD7), (buttons0, buttons1, buttons2), display, colors, 0, 3)
+    app = ApplicationController((servoD5, servoD7), (buttons0, buttons1, buttons2), display, colors, 1, 3)
 
     # Rotary encoder button
     # Shorts to ground when pressed
